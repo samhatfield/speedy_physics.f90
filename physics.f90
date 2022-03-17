@@ -9,7 +9,8 @@ contains
 
     !> Compute physical parametrization tendencies for u, v, t, q and add them
     !  to the dynamical grid-point tendencies
-    subroutine get_physical_tendencies(ug1, vg1, tg1, qg1, phig1, pslg1, utend, vtend, ttend, qtend)
+    subroutine get_physical_tendencies(prog_u, prog_v, prog_t, prog_q, prog_phi, prog_sp, &
+                                     & tend_u, tend_v, tend_t, tend_q)
         ! Resolution parameters
         use params, only: nlon, nlat, nlev, ngp
 
@@ -35,17 +36,17 @@ contains
         ! Date 
         !include "com_date.h"
 
-        real :: ug1(ngp,nlev)
-        real :: vg1(ngp,nlev)
-        real :: tg1(ngp,nlev)
-        real :: qg1(ngp,nlev)
-        real :: phig1(ngp,nlev)
-        real :: pslg1(ngp)
+        real, intent(in) :: prog_u(ngp,nlev)
+        real, intent(in) :: prog_v(ngp,nlev)
+        real, intent(in) :: prog_t(ngp,nlev)
+        real, intent(in) :: prog_q(ngp,nlev)
+        real, intent(in) :: prog_phi(ngp,nlev)
+        real, intent(in) :: prog_sp(ngp)
 
-        real :: utend(ngp,nlev)
-        real :: vtend(ngp,nlev)
-        real :: ttend(ngp,nlev)
-        real :: qtend(ngp,nlev)
+        real, intent(out) :: tend_u(ngp,nlev)
+        real, intent(out) :: tend_v(ngp,nlev)
+        real, intent(out) :: tend_t(ngp,nlev)
+        real, intent(out) :: tend_q(ngp,nlev)
 
         integer :: iptop(ngp)
         integer :: icltop(ngp,2)
@@ -54,6 +55,12 @@ contains
         real :: gse(ngp)
 
         integer :: iitest = 0
+
+        ! Just make the tendencies equal to the prognostics divided by 10, as a test
+        tend_u = prog_u/10.0
+        tend_v = prog_v/10.0
+        tend_t = prog_t/10.0
+        tend_q = prog_q/10.0
 
 !C--   1. Compute sfc. pressure, dry static energy, relative humidity
 !
