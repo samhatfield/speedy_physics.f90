@@ -13,6 +13,8 @@ contains
                                      & ngp, nlev, sig, &
                                      & tend_u, tend_v, tend_t, tend_q)
         ! Resolution parameters
+        use physical_constants, only: cp
+        use humidity, only: spec_hum_to_rel_hum
 
         ! Constants + functions of sigma and latitude
         !include "com_physcon.h"
@@ -41,7 +43,7 @@ contains
         real, intent(in) :: prog_t(ngp,nlev)
         real, intent(in) :: prog_q(ngp,nlev)
         real, intent(in) :: prog_phi(ngp,nlev)
-        real, intent(in) :: prog_sp(ngp)
+        real, intent(in) :: prog_lnsp(ngp)
         integer, intent(in) :: ngp
         integer, intent(in) :: nlev
         real, intent(in) :: sig(nlev)
@@ -51,13 +53,17 @@ contains
         real, intent(out) :: tend_t(ngp,nlev)
         real, intent(out) :: tend_q(ngp,nlev)
 
+        real :: prog_sp(ngp)
+        real :: prog_sp_inv(ngp)
+        real :: stat_en(ngp,nlev)
+        real :: rh(ngp,nlev)
+        real :: qsat(ngp,nlev)
+
+        integer :: k
         integer :: iptop(ngp)
         integer :: icltop(ngp,2)
         integer :: icnv(ngp)
-        real :: rps(ngp)
         real :: gse(ngp)
-
-        integer :: iitest = 0
 
         ! Just make the tendencies equal to the prognostics divided by 10, as a test
         tend_u = prog_u/10.0
@@ -65,22 +71,24 @@ contains
         tend_t = prog_t/10.0
         tend_q = prog_q/10.0
 
-!C--   1. Compute sfc. pressure, dry static energy, relative humidity
-!
-!      if (iitest.eq.1) print *, ' 1. in PHYPAR'
-!
-!      PSG(:)=EXP(PSLG1(:))     
-!      RPS(:)=1./PSG(:)
-!
-!      DO K=1,NLEV
-!        SE(:,K)=CP*TG1(:,K)+PHIG1(:,K)
-!      ENDDO
-!
-!      DO K=1,NLEV
-!        CALL SHTORH (1,NGP,TG1(1,K),PSG,SIG(K),QG1(1,K),
-!     &               RH(1,K),QSAT(1,K))
-!      ENDDO
-!
+        ! =========================================================================
+        ! Compute thermodynamic variables
+        ! =========================================================================
+
+        ! Surface pressure
+        prog_sp = exp(prog_lnsp)
+
+        ! Inverse of surface pressure
+        prog_sp_inv = 1.0/prog_sp
+
+        ! Dry static energy
+        stat_en = cp*prog_t + prog_phi
+
+        ! Calculate relative humidity from specific humidity
+        do k = 1, nlev
+            call spec_hum_to_rel_hum(prog_t(:,k), prog_sp, sig(k), prog_q(:,k), rh(:,k), qsat(:,k))
+        end do
+
 !C--   2. Precipitation 
 !
 !C     2.1 Deep convection
