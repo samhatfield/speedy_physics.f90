@@ -15,6 +15,7 @@ contains
         ! Resolution parameters
         use physical_constants, only: cp
         use humidity, only: spec_hum_to_rel_hum
+        use convection, only: get_convection_tendencies
 
         ! Constants + functions of sigma and latitude
         !include "com_physcon.h"
@@ -59,8 +60,14 @@ contains
         real :: rh(ngp,nlev)
         real :: qsat(ngp,nlev)
 
+        ! Intermediate variables for convection
+        integer :: cnv_top(ngp)
+        real :: cldbse_mss_flx(ngp)
+        real :: cnv_prec(ngp)
+        real :: tend_t_cnv(ngp,nlev)
+        real :: tend_q_cnv(ngp,nlev)
+
         integer :: k
-        integer :: iptop(ngp)
         integer :: icltop(ngp,2)
         integer :: icnv(ngp)
         real :: gse(ngp)
@@ -86,20 +93,22 @@ contains
 
         ! Calculate relative humidity from specific humidity
         do k = 1, nlev
-            call spec_hum_to_rel_hum(prog_t(:,k), prog_sp, sig(k), prog_q(:,k), rh(:,k), qsat(:,k))
+            call spec_hum_to_rel_hum(prog_t(:,k), prog_sp, sig(k), prog_q(:,k), &
+                                   & rh(:,k), qsat(:,k))
         end do
 
-!C--   2. Precipitation 
-!
-!C     2.1 Deep convection
-!
-!      CALL CONVMF (PSG,SE,QG1,QSAT,
-!     &             IPTOP,CBMF,PRECNV,TT_CNV,QT_CNV)
-!
-!      DO K=2,NLEV
-!        TT_CNV(:,K) = TT_CNV(:,K)*RPS(:)*GRDSCP(K)
-!        QT_CNV(:,K) = QT_CNV(:,K)*RPS(:)*GRDSIG(K)
-!      ENDDO
+        ! =========================================================================
+        ! Precipitation
+        ! =========================================================================
+
+        ! Deep convection
+        call get_convection_tendencies(prog_sp, stat_en, prog_q, qsat, &
+                                     & cnv_top, cldbse_mss_flx, cnv_prec, tend_t_cnv, tend_q_cnv)
+
+!        do k = 2, nlev
+!            tt_cnv(:,k) = tt_cnv(:,k)*rps*grdscp(k)
+!            qt_cnv(:,k) = qt_cnv(:,k)*rps*grdsig(k)
+!        end do
 !
 !      ICNV(:) = NLEV-IPTOP(:)
 !
