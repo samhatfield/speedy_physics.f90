@@ -62,32 +62,3 @@ C
       RETURN
       END
 
-      SUBROUTINE ZMEDDY (NLON,NLAT,FF,ZM,EDDY)
-C
-C *** Decompose a field into zonal-mean and eddy component
-C
-      REAL FF(NLON,NLAT), ZM(NLAT), EDDY(NLON,NLAT)
-C
-      RNLON=1./NLON
-C
-      DO 130 J=1,NLAT
-C
-        ZM(J)=0.
-        DO 110 I=1,NLON
-          ZM(J)=ZM(J)+FF(I,J)
- 110    CONTINUE
-        ZM(J)=ZM(J)*RNLON
-C
-        DO 120 I=1,NLON
-          EDDY(I,J)=FF(I,J)-ZM(J)
- 120    CONTINUE
-C
- 130  CONTINUE
-C
-C--
-      RETURN
-      END
-
-
-
-
