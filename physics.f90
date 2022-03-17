@@ -11,12 +11,7 @@ contains
     !  to the dynamical grid-point tendencies
     subroutine get_physical_tendencies(ug1, vg1, tg1, qg1, phig1, pslg1, utend, vtend, ttend, qtend)
         ! Resolution parameters
-        use params, only: ix, il, kx
-
-        integer, parameter :: nlon = ix
-        integer, parameter :: nlat = il
-        integer, parameter :: nlev = kx
-        integer, parameter :: ngp = nlon*nlat
+        use params, only: nlon, nlat, nlev, ngp
 
         ! Constants + functions of sigma and latitude
         !include "com_physcon.h"
