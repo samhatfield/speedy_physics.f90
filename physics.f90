@@ -10,9 +10,9 @@ contains
     !> Compute physical parametrization tendencies for u, v, t, q and add them
     !  to the dynamical grid-point tendencies
     subroutine get_physical_tendencies(prog_u, prog_v, prog_t, prog_q, prog_phi, prog_sp, &
+                                     & ngp, nlev, &
                                      & tend_u, tend_v, tend_t, tend_q)
         ! Resolution parameters
-        use params, only: nlon, nlat, nlev, ngp
 
         ! Constants + functions of sigma and latitude
         !include "com_physcon.h"
@@ -42,6 +42,8 @@ contains
         real, intent(in) :: prog_q(ngp,nlev)
         real, intent(in) :: prog_phi(ngp,nlev)
         real, intent(in) :: prog_sp(ngp)
+        integer, intent(in) :: ngp
+        integer, intent(in) :: nlev
 
         real, intent(out) :: tend_u(ngp,nlev)
         real, intent(out) :: tend_v(ngp,nlev)

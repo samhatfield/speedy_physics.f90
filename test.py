@@ -1,13 +1,15 @@
-from params import params
 from physics import physics
 import numpy as np
 
-prog_u = np.random.rand(params.ngp,params.nlev)
-prog_v = np.random.rand(params.ngp,params.nlev)
-prog_t = np.random.rand(params.ngp,params.nlev)
-prog_q = np.random.rand(params.ngp,params.nlev)
-prog_phi = np.random.rand(params.ngp,params.nlev)
-prog_sp = np.random.rand(params.ngp)
+nlat, nlon, nlev = 96, 48, 8
+ngp = nlat*nlon
+
+prog_u = np.random.rand(ngp,nlev)
+prog_v = np.random.rand(ngp,nlev)
+prog_t = np.random.rand(ngp,nlev)
+prog_q = np.random.rand(ngp,nlev)
+prog_phi = np.random.rand(ngp,nlev)
+prog_sp = np.random.rand(ngp)
 
 tend_u, tend_v, tend_t, tend_q = physics.get_physical_tendencies(prog_u, prog_v, prog_t, prog_q, prog_phi, prog_sp)
 

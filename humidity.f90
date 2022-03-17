@@ -1,6 +1,4 @@
 module humidity
-    use params, only: ngp
-
     implicit none
 
     private
@@ -10,34 +8,34 @@ module humidity
 
 contains
     subroutine spec_hum_to_rel_hum(prog_t, prog_sp, sig, prog_q, rh, qsat)
-        real, intent(in) :: prog_t(ngp)
-        real, intent(in) :: prog_sp(ngp)
+        real, intent(in) :: prog_t(:)
+        real, intent(in) :: prog_sp(:)
         real, intent(in) :: sig
-        real, intent(in) :: prog_q(ngp)
-        real, intent(inout) :: rh(ngp)
-        real, intent(inout) :: qsat(ngp)
+        real, intent(in) :: prog_q(:)
+        real, intent(inout) :: rh(:)
+        real, intent(inout) :: qsat(:)
 
         qsat = get_qsat(prog_t, prog_sp, sig)
         rh = prog_q/qsat
     end subroutine spec_hum_to_rel_hum
 
     subroutine rel_hum_to_spec_hum(prog_t, prog_sp, sig, rh, prog_q, qsat)
-        real, intent(in) :: prog_t(ngp)
-        real, intent(in) :: prog_sp(ngp)
+        real, intent(in) :: prog_t(:)
+        real, intent(in) :: prog_sp(:)
         real, intent(in) :: sig
-        real, intent(in) :: rh(ngp)
-        real, intent(inout) :: prog_q(ngp)
-        real, intent(inout) :: qsat(ngp)
+        real, intent(in) :: rh(:)
+        real, intent(inout) :: prog_q(:)
+        real, intent(inout) :: qsat(:)
 
         qsat = get_qsat(prog_t, prog_sp, sig)
         prog_q = rh*qsat
     end subroutine rel_hum_to_spec_hum
 
     function get_qsat(prog_t, prog_sp, sig) result(qsat)
-        real, intent(in) :: prog_t(ngp) !! Absolute temperature
-        real, intent(in) :: prog_sp(ngp) !! Normalized pressure (p/1000 hPa)
-        real, intent(in) :: sig     !! Sigma level
-        real :: qsat(ngp)           !! Saturation specific humidity in g/kg
+        real, intent(in) :: prog_t(:)  !! Absolute temperature
+        real, intent(in) :: prog_sp(:) !! Normalized pressure (p/1000 hPa)
+        real, intent(in) :: sig        !! Sigma level
+        real :: qsat(size(prog_t))     !! Saturation specific humidity in g/kg
 
         real :: e0, c1, c2, t0, t1, t2
 
@@ -52,7 +50,7 @@ contains
         t1 = 35.86
         t2 = 7.66
 
-        do i = 1, ngp
+        do i = 1, size(prog_t)
             if (prog_t(i) >= t0) then
                 qsat(i) = e0*exp(c1*(prog_t(i) - t0)/(prog_t(i) - t1))
             else
