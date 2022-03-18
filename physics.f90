@@ -103,6 +103,7 @@ contains
 
         ! Deep convection
         call get_convection_tendencies(prog_sp, stat_en, prog_q, qsat, &
+                                     & ngp, nlev, sig, &
                                      & cnv_top, cldbse_mss_flx, cnv_prec, tend_t_cnv, tend_q_cnv)
 
 !        do k = 2, nlev
