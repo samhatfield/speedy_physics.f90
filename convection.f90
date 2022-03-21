@@ -41,7 +41,7 @@ contains
         real :: qdif(ngp)
         real :: entr(2:nlev-1), delq, enmass, fdq, fds, fm0, fmass, fpsa, fqmax
         real :: fsq, fuq, fus, qb, qmax, qsatb, qthr0, qthr1, rdps, rlhc, sb, sentr
-        real :: wvi(ngp,2)
+        real :: wvi(nlev,2)
         real :: dsig(nlev)
         
         logical :: lqthr
@@ -73,6 +73,11 @@ contains
         entr(2:nl1) = entr(2:nl1)*sentr
 
         ! 2. Check of conditions for convection
+        ! Saturation moist static energy
+        do k = 2, nlev
+            mss(:,k) = stat_en(:,k) + alhc*qsat(:,k)
+        end do
+
         rlhc = 1.0/alhc
 
         do j = 1, ngp
