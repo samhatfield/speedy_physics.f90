@@ -9,7 +9,7 @@ contains
 
     !> Compute physical parametrization tendencies for u, v, t, q and add them
     !  to the dynamical grid-point tendencies
-    subroutine get_physical_tendencies(prog_u, prog_v, prog_t, prog_q, prog_phi, prog_lnsp, &
+    subroutine get_physical_tendencies(prog_u, prog_v, prog_t, prog_q, prog_phi, prog_sp, &
                                      & ngp, nlev, sig, &
                                      & tend_u, tend_v, tend_t, tend_q)
         ! Resolution parameters
@@ -44,7 +44,7 @@ contains
         real, intent(in) :: prog_t(ngp,nlev)
         real, intent(in) :: prog_q(ngp,nlev)
         real, intent(in) :: prog_phi(ngp,nlev)
-        real, intent(in) :: prog_lnsp(ngp)
+        real, intent(in) :: prog_sp(ngp)
         integer, intent(in) :: ngp
         integer, intent(in) :: nlev
         real, intent(in) :: sig(nlev)
@@ -54,7 +54,6 @@ contains
         real, intent(out) :: tend_t(ngp,nlev)
         real, intent(out) :: tend_q(ngp,nlev)
 
-        real :: prog_sp(ngp)
         real :: prog_sp_inv(ngp)
         real :: stat_en(ngp,nlev)
         real :: rh(ngp,nlev)
@@ -81,9 +80,6 @@ contains
         ! =========================================================================
         ! Compute thermodynamic variables
         ! =========================================================================
-
-        ! Surface pressure
-        prog_sp = exp(prog_lnsp)
 
         ! Inverse of surface pressure
         prog_sp_inv = 1.0/prog_sp
