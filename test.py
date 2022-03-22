@@ -1,6 +1,7 @@
 from physics import physics
 import numpy as np
 import xarray as xr
+import matplotlib.pyplot as plt
 
 # Open NetCDF file containing an example of prognostic variables (taken from a
 # run of speedy.f90)
@@ -25,4 +26,28 @@ prog_sp = np.transpose(progs["ps"].data/1.0e5) # Convert from Pa to 10^5 Pa
 tend_u, tend_v, tend_t, tend_q = physics.get_physical_tendencies(prog_u, prog_v, prog_t, prog_q,
                                                                  prog_phi, prog_sp, σ)
 
+# Choose the grid points to plot where the temperature tendency is non-zero
+grid_points_to_plot = np.unique(np.argwhere(tend_t != 0.0)[:,0]).tolist()
+
+# Only plot 10 grid points
+npoints = 10
+
+# Model levels
+levels = range(1, nlev+1)
+
+fig, ax = plt.subplots(ncols=2, figsize=(12, 6), sharey=True)
+plt.suptitle("Parametrised physical tendencies for 10 selected grid points")
+
+for i, _ in zip(grid_points_to_plot, range(npoints)):
+    ax[0].plot(tend_t[i,:], levels)
+ax[0].invert_yaxis()
+ax[0].set_title("Temperature tendency")
+ax[0].set_ylabel("Model level")
+
+for i, _ in zip(grid_points_to_plot, range(npoints)):
+    ax[1].plot(tend_q[i,:], levels)
+ax[1].set_title("Humidity tendency")
+
+plt.savefig("tendencies.png", bbox_inches="tight")
+plt.show()
 
