@@ -4,6 +4,7 @@ module utils
     private
     public get_sigma_thicknesses
     public get_vertical_interpolation_weights
+    public get_flux_conv_uvq
 
 contains
     function get_half_sigma(sig) result(sigh)
@@ -33,7 +34,21 @@ contains
         do k = 1, size(sig)
             dsig(k) = hsg(k+1) - hsg(k)
         end do
-     end function get_sigma_thicknesses
+    end function get_sigma_thicknesses
+
+    function get_flux_conv_uvq(sig) result(grdsig)
+        use physical_constants, only: grav, p0
+
+        real, intent(in) :: sig(:)
+
+        real :: dsig(size(sig))
+
+        real :: grdsig(size(sig))
+
+        dsig = get_sigma_thicknesses(sig)
+
+        grdsig = grav/(dsig*p0)
+    end function get_flux_conv_uvq
 
     function get_vertical_interpolation_weights(sig) result(wvi)
         use physical_constants, only: grav, cp, p0

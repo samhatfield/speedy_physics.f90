@@ -16,6 +16,7 @@ contains
         use physical_constants, only: cp
         use humidity, only: spec_hum_to_rel_hum
         use convection, only: get_convection_tendencies
+        use utils, only: get_flux_conv_uvq
 
         ! Constants + functions of sigma and latitude
         !include "com_physcon.h"
@@ -71,11 +72,14 @@ contains
         integer :: icnv(ngp)
         real :: gse(ngp)
 
+        ! Array for converting fluxes of prognostics into tendencies
+        real :: grdsig(nlev)
+
+        grdsig = get_flux_conv_uvq(sig)
+
         ! Just make the tendencies equal to the prognostics divided by 10, as a test
         tend_u = prog_u/10.0
         tend_v = prog_v/10.0
-        tend_t = prog_t/10.0
-        tend_q = prog_q/10.0
 
         ! =========================================================================
         ! Compute thermodynamic variables
@@ -98,17 +102,19 @@ contains
         ! =========================================================================
 
         ! Deep convection
+        tend_t_cnv = 0.0
+        tend_q_cnv = 0.0
         call get_convection_tendencies(prog_sp, stat_en, prog_q, qsat, &
                                      & ngp, nlev, sig, &
                                      & cnv_top, cldbse_mss_flx, cnv_prec, tend_t_cnv, tend_q_cnv)
 
-!        do k = 2, nlev
-!            tt_cnv(:,k) = tt_cnv(:,k)*rps*grdscp(k)
-!            qt_cnv(:,k) = qt_cnv(:,k)*rps*grdsig(k)
-!        end do
-!
-!      ICNV(:) = NLEV-IPTOP(:)
-!
+        do k = 2, nlev
+            tend_t(:,k) = tend_t_cnv(:,k)*prog_sp_inv*grdsig(k)/cp
+            tend_q(:,k) = tend_q_cnv(:,k)*prog_sp_inv*grdsig(k)
+        end do
+
+        icnv(:) = nlev - cnv_top(:)
+
 !C     2.2 Large-scale condensation
 !
 !cfk#if !defined(KNMI)
