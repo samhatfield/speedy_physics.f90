@@ -16,6 +16,7 @@ contains
         use physical_constants, only: cp
         use humidity, only: spec_hum_to_rel_hum
         use convection, only: get_convection_tendencies
+        use condensation, only: get_large_scale_condensation_tendencies
         use utils, only: get_flux_conv_uvq
 
         ! Constants + functions of sigma and latitude
@@ -60,12 +61,13 @@ contains
         real :: rh(ngp,nlev)
         real :: qsat(ngp,nlev)
 
-        ! Intermediate variables for convection
+        ! Intermediate variables for precipitation
         integer :: cnv_top(ngp)
         real :: cldbse_mss_flx(ngp)
         real :: cnv_prec(ngp)
-        real :: tend_t_cnv(ngp,nlev)
-        real :: tend_q_cnv(ngp,nlev)
+        real :: tend_t_prc(ngp,nlev)
+        real :: tend_q_prc(ngp,nlev)
+        real :: precls(ngp)
 
         integer :: k
         integer :: icltop(ngp,2)
@@ -91,7 +93,8 @@ contains
         ! Dry static energy
         stat_en = cp*prog_t + prog_phi
 
-        ! Calculate relative humidity from specific humidity
+        ! Calculate relative humidity from specific humidity (along with the
+        ! saturation specific humidity)
         do k = 1, nlev
             call spec_hum_to_rel_hum(prog_t(:,k), prog_sp, sig(k), prog_q(:,k), &
                                    & rh(:,k), qsat(:,k))
@@ -102,34 +105,33 @@ contains
         ! =========================================================================
 
         ! Deep convection
-        tend_t_cnv = 0.0
-        tend_q_cnv = 0.0
+        tend_t_prc = 0.0
+        tend_q_prc = 0.0
         call get_convection_tendencies(prog_sp, stat_en, prog_q, qsat, &
                                      & ngp, nlev, sig, &
-                                     & cnv_top, cldbse_mss_flx, cnv_prec, tend_t_cnv, tend_q_cnv)
+                                     & cnv_top, cldbse_mss_flx, cnv_prec, tend_t_prc, tend_q_prc)
 
         do k = 2, nlev
-            tend_t(:,k) = tend_t_cnv(:,k)*prog_sp_inv*grdsig(k)/cp
-            tend_q(:,k) = tend_q_cnv(:,k)*prog_sp_inv*grdsig(k)
+            tend_t(:,k) = tend_t_prc(:,k)*prog_sp_inv*grdsig(k)/cp
+            tend_q(:,k) = tend_q_prc(:,k)*prog_sp_inv*grdsig(k)
         end do
 
         icnv(:) = nlev - cnv_top(:)
 
-!C     2.2 Large-scale condensation
-!
-!cfk#if !defined(KNMI)
-!      CALL LSCOND (PSG,QG1,QSAT,
-!     &             IPTOP,PRECLS,TT_LSC,QT_LSC)
-!cfk#else
-!cfk      CALL LSCOND (PSG,QG1,QSAT,TS,
-!cfk     &             IPTOP,PRECLS,SNOWLS,TT_LSC,QT_LSC)
-!cfk#endif
-!
-!      DO K=2,NLEV
-!        TTEND(:,K) = TTEND(:,K)+TT_CNV(:,K)+TT_LSC(:,K)
-!        QTEND(:,K) = QTEND(:,K)+QT_CNV(:,K)+QT_LSC(:,K)
-!      ENDDO
-!
+        ! Large-scale condensation
+        tend_t_prc = 0.0
+        tend_q_prc = 0.0
+        call get_large_scale_condensation_tendencies(prog_sp, prog_q, qsat, cnv_top, &
+                                                   & ngp, nlev, sig, &
+                                                   & precls, tend_t_prc, tend_q_prc)
+
+        return
+
+        do k = 2, nlev
+            tend_t(:,k) = tend_t(:,k) + tend_t_prc(:,k)
+            tend_q(:,k) = tend_q(:,k) + tend_q_prc(:,k)
+        end do
+
 !C--   3. Radiation (shortwave and longwave) and surface fluxes
 !
 !C     3.1 Compute shortwave tendencies and initialize lw transmissivity
