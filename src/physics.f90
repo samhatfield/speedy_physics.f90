@@ -229,33 +229,6 @@ contains
 !C--   5. Store all fluxes for coupling and daily-mean output
 !
 !c      CALL DMFLUX (1)
-!
-!C--   6. Random diabatic forcing 
-!
-!      IF (LRANDF) THEN
-!
-!C       6.1 Compute zonal-mean cross sections of diabatic forcing
-!
-!        IF (LRADSW) THEN
-!          CALL XS_RDF (TT_LSC,TT_CNV,1)
-!          CALL XS_RDF (TT_RSW,TT_RLW,2)
-!        ENDIF
-!
-!C--     6.2 Compute and store 3-D pattern of random diabatic forcing
-!        DO K=1,NLEV
-!          TT_CNV(:,K) = TT_CNV(:,K)+TT_LSC(:,K)
-!        ENDDO
-!
-!        CALL SETRDF (TT_LSC)
-!
-!        DO K=1,NLEV
-!          TTEND(:,K) = TTEND(:,K)+TT_LSC(:,K)
-!        ENDDO
-!
-!      ENDIF
-
-
-!      include "phy_setrdf.f"
     end subroutine get_physical_tendencies
 end module physics
 
