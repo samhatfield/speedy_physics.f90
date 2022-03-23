@@ -125,7 +125,6 @@ contains
                                                    & ngp, nlev, sig, &
                                                    & precls, tend_t_prc, tend_q_prc)
 
-        return
 
         do k = 2, nlev
             tend_t(:,k) = tend_t(:,k) + tend_t_prc(:,k)
