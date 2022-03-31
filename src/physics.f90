@@ -10,13 +10,14 @@ contains
     !> Compute physical parametrization tendencies for u, v, t, q and add them
     !  to the dynamical grid-point tendencies
     subroutine get_physical_tendencies(prog_u, prog_v, prog_t, prog_q, prog_phi, prog_sp, &
-                                     & ngp, nlev, sig, &
+                                     & ngp, nlev, nlat, sig, lats, tyear, &
                                      & tend_u, tend_v, tend_t, tend_q)
         ! Resolution parameters
         use physical_constants, only: cp
         use humidity, only: spec_hum_to_rel_hum
         use convection, only: get_convection_tendencies
         use condensation, only: get_large_scale_condensation_tendencies
+        use radiation, only: sol_oz
         use utils, only: get_flux_conv_uvq
 
         ! Constants + functions of sigma and latitude
@@ -49,7 +50,10 @@ contains
         real, intent(in) :: prog_sp(ngp)
         integer, intent(in) :: ngp
         integer, intent(in) :: nlev
+        integer, intent(in) :: nlat
         real, intent(in) :: sig(nlev)
+        real, intent(in) :: lats(nlat)
+        real, intent(in) :: tyear
 
         real, intent(out) :: tend_u(ngp,nlev)
         real, intent(out) :: tend_v(ngp,nlev)
@@ -60,6 +64,8 @@ contains
         real :: stat_en(ngp,nlev)
         real :: rh(ngp,nlev)
         real :: qsat(ngp,nlev)
+
+        integer :: nlon
 
         ! Intermediate variables for precipitation
         integer :: cnv_top(ngp)
@@ -74,8 +80,13 @@ contains
         integer :: icnv(ngp)
         real :: gse(ngp)
 
+        ! Intermediate variables for radiation
+        real :: topsr(nlat)
+
         ! Array for converting fluxes of prognostics into tendencies
         real :: grdsig(nlev)
+
+        nlon = ngp/nlat
 
         grdsig = get_flux_conv_uvq(sig)
 
@@ -125,42 +136,34 @@ contains
                                                    & ngp, nlev, sig, &
                                                    & precls, tend_t_prc, tend_q_prc)
 
-
         do k = 2, nlev
             tend_t(:,k) = tend_t(:,k) + tend_t_prc(:,k)
             tend_q(:,k) = tend_q(:,k) + tend_q_prc(:,k)
         end do
 
-!C--   3. Radiation (shortwave and longwave) and surface fluxes
+        ! =========================================================================
+        ! Radiation (shortwave and longwave) and surface fluxes
+        ! =========================================================================
+
+        ! Compute shortwave tendencies and initialize lw transmissivity
+        ! The sw radiation may be called at selected time steps
+!       if (lradsw) then
+!            gse(:) = (stat_en(:,nlev-1) - stat_en(:,nlev))/(prog_phi(:,nlev-1) - prog_phi(:,nlev))
 !
-!C     3.1 Compute shortwave tendencies and initialize lw transmissivity
+            call sol_oz(tyear, nlon, lats, topsr)
 !
-!      if (iitest.eq.1) print *, ' 3.1 in PHYPAR'
+!            call cloud(qg1,rh,precnv,precls,iptop,gse,fmask1,icltop,cloudc,clstr)
 !
-!C     The sw radiation may be called at selected time steps
+!            cltop(:) = sigh(icltop(:,1)-1)*prog_sp(:)
+!            prtop(:) = float(iptop(:))
 !
-!      IF (LRADSW) THEN
+!            call radsw(prog_sp,qg1,icltop,cloudc,clstr,ssrd,ssr,tsr,tt_rsw)
 !
-!        GSE(:) = (SE(:,NLEV-1)-SE(:,NLEV))/
-!     &           (PHIG1(:,NLEV-1)-PHIG1(:,NLEV))
-!
-!        CALL SOL_OZ (TYEAR,RDAY)
-!
-!        CALL CLOUD (QG1,RH,PRECNV,PRECLS,IPTOP,GSE,FMASK1,
-!     &              ICLTOP,CLOUDC,CLSTR)
-!
-!        CLTOP(:) = SIGH(ICLTOP(:,1)-1)*PSG(:)
-!        PRTOP(:) = float(IPTOP(:))
-!
-!        CALL RADSW (PSG,QG1,ICLTOP,CLOUDC,CLSTR,
-!     &              SSRD,SSR,TSR,TT_RSW)
-!
-!        DO K=1,NLEV
-!          TT_RSW(:,K)=TT_RSW(:,K)*RPS(:)*GRDSCP(K)
-!        ENDDO
-!
-!      ENDIF
-!
+!            do k = 1, nlev
+!                tt_rsw(:,k) = tt_rsw(:,k)*rps(:)*grdscp(k)
+!            end do
+!       end if
+
 !C     3.2 Compute downward longwave fluxes 
 !
 !      CALL RADLW (-1,TG1,TS,

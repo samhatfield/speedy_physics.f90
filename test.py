@@ -5,7 +5,13 @@ import matplotlib.pyplot as plt
 
 # Open NetCDF file containing an example of prognostic variables (taken from a
 # run of speedy.f90)
-progs = xr.open_dataset("prognostics.nc").squeeze().stack(ngp=("lat", "lon"))
+progs_ds = xr.open_dataset("prognostics.nc")
+
+# Extract Gaussian latitudes
+lats = progs_ds.coords["lat"].values
+
+# Squeeze lat-lon into a single dimension "ngp"
+progs = progs_ds.squeeze().stack(ngp=("lat", "lon"))
 
 # Infer grid dimensions from u-wind shape
 nlev, ngp = progs["u"].shape
@@ -23,11 +29,12 @@ prog_q = np.transpose(progs["q"].data)*1000.0 # Convert from kg/kg to g/kg
 prog_phi = np.transpose(progs["phi"].data)*9.81 # Convert to geopotential
 prog_sp = np.transpose(progs["ps"].data/1.0e5) # Convert from Pa to 10^5 Pa
 
-tend_u, tend_v, tend_t, tend_q = physics.get_physical_tendencies(prog_u, prog_v, prog_t, prog_q,
-                                                                 prog_phi, prog_sp, σ)
+# The time in the year as a fraction (0.0 - 1.0)
+# Needed to compute the solar insolation
+tyear = 0.0
 
-# Choose the grid points to plot where the temperature tendency is non-zero
-grid_points_to_plot = np.unique(np.argwhere(tend_t != 0.0)[:,0]).tolist()
+tend_u, tend_v, tend_t, tend_q = physics.get_physical_tendencies(prog_u, prog_v, prog_t, prog_q,
+                                                                 prog_phi, prog_sp, σ, lats, tyear)
 
 # Only plot 10 grid points
 npoints = 10
