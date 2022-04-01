@@ -20,7 +20,7 @@ nlev, ngp = progs["u"].shape
 σ_half = np.array([0.000, 0.050, 0.140, 0.260, 0.420, 0.600, 0.770, 0.900, 1.000])
 
 # Open land-sea mask
-lsm = xr.open_dataset("lsm.nc")
+lsm = xr.open_dataset("lsm.nc").squeeze().stack(ngp=("lat", "lon"))["lsm"].data
 
 # Extract prognostics from input data file, converting units to the ones used internally by Speedy,
 # where appropriate
