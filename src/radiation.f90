@@ -3,28 +3,53 @@ module radiation
     implicit none
 
     private
-    public sol_oz
+    public sol_oz, cloud
 
     ! Shortwave radiation and cloud constants
     real, parameter :: solc    = 342.0 !! Solar constant (area averaged) in W/m^2
+    real, parameter :: rhcl1   = 0.30  !! Relative humidity threshold corresponding to
+                                       !! cloud cover = 0
+    real, parameter :: rhcl2   = 1.00  !! Relative humidity correponding to cloud cover = 1
+    real, parameter :: qcl     = 0.20  !! Specific humidity threshold for cloud cover
+    real, parameter :: wpcl    = 0.2   !! Cloud cover weight for the square-root of precipitation
+                                       !! (for p = 1 mm/day)
+    real, parameter :: pmaxcl  = 10.0  !! Maximum value of precipitation (mm/day) contributing to
+                                       !! cloud cover
+    real, parameter :: clsmax  = 0.60  !! Maximum stratiform cloud cover
+    real, parameter :: clsminl = 0.15  !! Minimum stratiform cloud cover over land (for RH = 1)
+    real, parameter :: gse_s0  = 0.25  !! Gradient of dry static energy corresponding to
+                                       !! stratiform cloud cover = 0
+    real, parameter :: gse_s1  = 0.40  !! Gradient of dry static energy corresponding to
+                                       !! stratiform cloud cover = 1
+    real, parameter :: epssw   = 0.020 !! Fraction of incoming solar radiation absorbed by ozone
+
+    real, parameter :: pi = 3.14159265359
 
 contains
 
-    subroutine sol_oz(tyear, nlon, lats, topsr)
+    subroutine sol_oz(tyear, nlon, lats, topsr, fsol, ozupp, ozone, zenit, stratz)
         real, intent(in) :: tyear
         integer, intent(in) :: nlon
         real, intent(in) :: lats(:)
-
         real, intent(out) :: topsr(size(lats))
+        real, intent(out) :: fsol(nlon*size(lats))
+        real, intent(out) :: ozupp(nlon*size(lats))
+        real, intent(out) :: ozone(nlon*size(lats))
+        real, intent(out) :: zenit(nlon*size(lats))
+        real, intent(out) :: stratz(nlon*size(lats))
 
-        integer :: ngp, nlat
+        integer :: ngp, nlat, nzen, i, j, j0
 
         real :: r4out(nlon*size(lats))
-        real :: alpha, dalpha, coz1, coz2, azen, rzen, czen, szen, fs0
-        integer :: nzen
+        real :: alpha, dalpha, coz1, coz2, azen, rzen, czen, szen, fs0, flat2
+        real :: clat(size(lats)), slat(size(lats))
 
         nlat = size(lats)
         ngp = nlon*nlat
+
+        ! Compute cosine and sine of latitude
+        clat = cos(lats*pi/180.0)
+        slat = sin(lats*pi/180.0)
 
         ! alpha = year phase ( 0 - 2pi, 0 = winter solstice = 22dec.h00 )
         alpha = 4.0*asin(1.0)*(tyear+10.0/365.0)
@@ -43,41 +68,36 @@ contains
 
         ! Solar radiation at the top
         call solar(tyear, 4.0*solc, lats, topsr)
-!
-!        ! FSOL longitude dependent
-!        do j = 1, ngp
-!            jlat = int(j/nlon + 1)
-!            j0 = j - nlon*(jlat - 1)     
-!            fsol(j) = topsr(j0,jlat)
-!        end do
-!
-!        do j = 1, nlat
-!            j0 = 1 + nlon*(j - 1)
-!            flat2 = 1.5*slat(j)**2 - 0.5
-!  
-!            ! Solar radiation at the top
-!  
-!            ! Ozone depth in upper and lower stratosphere 
-!            ozupp(j0) = 0.5*epssw
-!            ozone(j0) = 0.4*epssw*(1.0 + coz1*slat(j) + coz2*flat2)
-!  
-!            ! Zenith angle correction to (downward) absorptivity 
-!            zenit(j0) = 1.0 + azen*(1.0 - (clat(j)*czen + slat(j)*szen))**nzen
-!  
-!            ! Ozone absorption in upper and lower stratosphere 
-!            ozupp(j0) = fsol(j0)*ozupp(j0)*zenit(j0)
-!            ozone(j0) = fsol(j0)*ozone(j0)*zenit(j0)
-!  
-!            ! Polar night cooling in the stratosphere
-!            stratz(j0) = max(fs0 - fsol(j0), 0.0)
-!  
-!            do i = 1, nlon - 1
-!                ozone (i+j0) = ozone (j0)
-!                ozupp (i+j0) = ozupp (j0)
-!                zenit (i+j0) = zenit (j0)
-!                stratz(i+j0) = stratz(j0)
-!            end do
-!        end do
+
+        do j = 1, nlat
+            j0 = 1 + nlon*(j - 1)
+            flat2 = 1.5*slat(j)**2 - 0.5
+
+            ! Solar radiation at the top
+            fsol(j0) = topsr(j)
+
+            ! Ozone depth in upper and lower stratosphere
+            ozupp(j0) = 0.5*epssw
+            ozone(j0) = 0.4*epssw*(1.0 + coz1*slat(j) + coz2*flat2)
+
+            ! Zenith angle correction to (downward) absorptivity
+            zenit(j0) = 1.0 + azen*(1.0 - (clat(j)*czen + slat(j)*szen))**nzen
+
+            ! Ozone absorption in upper and lower stratosphere
+            ozupp(j0) = fsol(j0)*ozupp(j0)*zenit(j0)
+            ozone(j0) = fsol(j0)*ozone(j0)*zenit(j0)
+
+            ! Polar night cooling in the stratosphere
+            stratz(j0) = max(fs0 - fsol(j0), 0.0)
+
+            do i = 1, nlon - 1
+                fsol  (i+j0) = fsol  (j0)
+                ozone (i+j0) = ozone (j0)
+                ozupp (i+j0) = ozupp (j0)
+                zenit (i+j0) = zenit (j0)
+                stratz(i+j0) = stratz(j0)
+            end do
+        end do
     end subroutine sol_oz
 
     subroutine solar(tyear, csol, lats, topsr)
@@ -93,15 +113,11 @@ contains
         real :: ca1, ca2, ca3, cdecl, ch0, csolp, decl, fdis, h0, alpha, pigr, sa1
         real :: sa2, sa3, sdecl, sh0, tdecl
 
-        real :: pi = 3.14159265359
-
         nlat = size(lats)
 
-        ! Compute cosine of latitude
+        ! Compute cosine and sine of latitude
         clat = cos(lats*pi/180.0)
         slat = sin(lats*pi/180.0)
-
-        ! Compute sine of latitude
 
         ! 1. Compute declination angle and Earth-Sun distance factor
         pigr  = 2.0*asin(1.0)
@@ -124,7 +140,7 @@ contains
         tdecl = sdecl/cdecl
 
         ! 2. Compute daily-average insolation at the atm. top
-        csolp=csol/pigr
+        csolp = csol/pigr
 
         do j = 1, nlat
             ch0 = min(1.0, max(-1.0, -tdecl*slat(j)/clat(j)))
@@ -135,144 +151,84 @@ contains
         end do
     end subroutine solar
 
-!C--   Average daily flux of solar radiation, from Hartmann (1994)
-!
-!C--   1. Compute declination angle and Earth-Sun distance factor
-!
-!C--   2. Compute daily-average insolation at the atm. top
-!C--
-!
-!      SUBROUTINE CLOUD (QA,RH,PRECNV,PRECLS,IPTOP,GSE,FMASK,
-!     &                  ICLTOP,CLOUDC,CLSTR)
-!C--
-!C--   SUBROUTINE CLOUD (QA,RH,PRECNV,PRECLS,IPTOP,GSE,FMASK,
-!C--  &                  ICLTOP,CLOUDC,CLSTR)
-!C--
-!C--   Purpose: Compute cloud-top level and cloud cover
-!C--   Input:   QA     = specific humidity [g/kg]                (3-dim)
-!C--            RH     = relative humidity                       (3-dim)
-!C--            PRECNV = convective precipitation                (2-dim)
-!C--            PRECLS = large-scale precipitation               (2-dim)
-!C--            IPTOP  = top level of precipitating cloud        (2-dim)
-!C--            GSE    = gradient of dry st. energy (dSE/dPHI)   (2-dim)
-!C--            FMASK  = fractional land-sea mask                (2-dim)
-!C--   Output:  ICLTOP = cloud top level (all clouds)            (2-dim)
-!C--            CLOUDC = total cloud cover                       (2-dim)
-!C--            CLSTR  = stratiform cloud cover                  (2-dim)
-!
-!C     Resolution parameters
-!C
-!      include "atparam.h"
-!      include "atparam1.h"
-!C
-!      PARAMETER ( NLON=IX, NLAT=IL, NLEV=KX, NGP=NLON*NLAT )
-!C
-!C     Constants + functions of sigma and latitude
-!C
-!      include "com_physcon.h"
-!C
-!C     Cloud and radiation parameters
-!C
-!      include "com_radcon.h"
-!
-!      INTEGER IPTOP(NGP)
-!      REAL QA(NGP,NLEV), RH(NGP,NLEV),  
-!     &     PRECNV(NGP),  PRECLS(NGP), GSE(NGP), FMASK(NGP)
-!
-!      INTEGER ICLTOP(NGP)
-!      REAL CLOUDC(NGP), CLSTR(NGP)
-!      
-!      NL1  = NLEV-1
-!      NLP  = NLEV+1
-!      RRCL = 1./(RHCL2-RHCL1)
-!
-!C--   1.  Cloud cover, defined as the sum of:
-!C         - a term proportional to the square-root of precip. rate 
-!C         - a quadratic function of the max. relative humidity
-!C           in tropospheric layers above PBL where Q > QACL :
-!C           ( = 0 for RHmax < RHCL1, = 1 for RHmax > RHCL2 )
-!C         Cloud-top level: defined as the highest (i.e. least sigma)
-!C           between the top of convection/condensation and
-!C           the level of maximum relative humidity. 
-!
-!
-!      DO J=1,NGP
-!        IF (RH(J,NL1).GT.RHCL1) THEN
-!          CLOUDC(J) = RH(J,NL1)-RHCL1
-!          ICLTOP(J) = NL1
-!        ELSE
-!          CLOUDC(J) = 0.
-!          ICLTOP(J) = NLP
-!        ENDIF
-!      ENDDO
-!
-!      DO K=3,NLEV-2
-!        DO J=1,NGP
-!          DRH = RH(J,K)-RHCL1
-!          IF (DRH.GT.CLOUDC(J).AND.QA(J,K).GT.QACL) THEN
-!            CLOUDC(J) = DRH
-!            ICLTOP(J) = K
-!          ENDIF
-!        ENDDO
-!      ENDDO
-!
-!      DO J=1,NGP
-!        CL1 = MIN(1.,CLOUDC(J)*RRCL)
-!        PR1 = MIN(PMAXCL,86.4*(PRECNV(J)+PRECLS(J)))
-!        CLOUDC(J) = MIN(1.,WPCL*SQRT(PR1)+CL1*CL1)
-!        ICLTOP(J) = MIN(IPTOP(J),ICLTOP(J))
-!      ENDDO
-!
-!C--   2.  Equivalent specific humidity of clouds 
-!
-!      DO J=1,NGP
-!        QCLOUD(J) = QA(J,NL1)
-!      ENDDO
-!
-!C--   3. Stratiform clouds at the top of PBL
-!
-!      inew = 1
-!
-!      if (inew.gt.0) then
-!
-!c        CLSMAX  = 0.6
-!c        CLSMINL = 0.15
-!c        GSE_S0  = 0.25
-!c        GSE_S1  = 0.40
-!
-!        CLFACT = 1.2
-!        RGSE   = 1./(GSE_S1-GSE_S0)
-!
-!        DO J=1,NGP
-!c         Stratocumulus clouds over sea
-!          FSTAB    = MAX(0.,MIN(1.,RGSE*(GSE(J)-GSE_S0)))
-!          CLSTR(J) = FSTAB*MAX(CLSMAX-CLFACT*CLOUDC(J),0.)
-!c         Stratocumulus clouds over land
-!          CLSTRL   = MAX(CLSTR(J),CLSMINL)*RH(J,NLEV)
-!          CLSTR(J) = CLSTR(J)+FMASK(J)*(CLSTRL-CLSTR(J))
-!        ENDDO
-!
-!      else
-!
-!        CLSMAX  = 0.3
-!        CLSMINL = 0.1
-!        ALBCOR  = ALBCL/0.5
-! 
-!        DO J=1,NGP
-!c         Stratocumulus clouds over sea
-!          CLSTR(J) = MAX(CLSMAX-CLOUDC(J),0.)
-!c         Rescale for consistency with previous albedo values
-!          CLSTR(J) = CLSTR(J)*ALBCOR
-!c         Correction for aerosols over land
-!          CLSTR(J) = CLSTR(J)+FMASK(J)*(CLSMINL-CLSTR(J))
-!        ENDDO
-!
-!      endif
-!
-!      RETURN
-!      END
-!
-!
+    subroutine cloud(prog_q, rh, cnv_prec, precls, cnv_top, gse, fmask, &
+                   & ngp, nlev, &
+                   & icltop, cloudc, clstr, qcloud)
+        real, intent(in) :: prog_q(ngp,nlev)
+        real, intent(in) :: rh(ngp,nlev)
+        real, intent(in) :: cnv_prec(ngp)
+        real, intent(in) :: precls(ngp)
+        integer, intent(in) :: cnv_top(ngp)
+        real, intent(in) :: gse(ngp)
+        real, intent(in) :: fmask(ngp)
+        integer, intent(in) :: ngp
+        integer, intent(in) :: nlev
+        integer, intent(out) :: icltop(ngp)
+        real, intent(out) :: cloudc(ngp)
+        real, intent(out) :: clstr(ngp)
+        real, intent(out) :: qcloud(ngp)
+
+        integer :: nl1, nlp, j, k
+        real :: clfact, clstrl, drh, fstab, pr1, rgse, rrcl
+
+        nl1  = nlev - 1
+        nlp  = nlev + 1
+        rrcl = 1.0/(rhcl2 - rhcl1)
+
+        ! 1. Cloud cover, defined as the sum of:
+        !  - a term proportional to the square-root of precip. rate
+        !  - a quadratic function of the max. relative humidity
+        !    in tropospheric layers above pbl where q > prog_qcl :
+        !     ( = 0 for rhmax < rhcl1, = 1 for rhmax > rhcl2 )
+        !    Cloud-top level: defined as the highest (i.e. least sigma)
+        !      between the top of convection/condensation and
+        !      the level of maximum relative humidity.
+        do j = 1, ngp
+            if (rh(j,nl1) > rhcl1) then
+                cloudc(j) = rh(j,nl1) - rhcl1
+                icltop(j) = nl1
+            else
+                cloudc(j) = 0.0
+                icltop(j) = nlp
+            endif
+        end do
+
+        do k = 3, nlev - 2
+            do j = 1, ngp
+                drh = rh(j,k) - rhcl1
+                if (drh > cloudc(j) .and. prog_q(j,k) > qcl) then
+                    cloudc(j) = drh
+                    icltop(j) = k
+                endif
+            end do
+        end do
+
+        do j = 1, ngp
+            pr1 = min(pmaxcl, 86.4*(cnv_prec(j) + precls(j)))
+            cloudc(j) = min(1.0, wpcl*sqrt(pr1) + min(1.0, cloudc(j)*rrcl)**2.0)
+            icltop(j) = min(cnv_top(j), icltop(j))
+        end do
+
+        ! 2.  Equivalent specific humidity of clouds
+        do j = 1, ngp
+            qcloud(j) = prog_q(j,nl1)
+        end do
+
+        ! 3. Stratiform clouds at the top of pbl
+        clfact = 1.2
+        rgse   = 1.0/(gse_s1 - gse_s0)
+
+        do j = 1, ngp
+            ! Stratocumulus clouds over sea
+            fstab = max(0.0, min(1.0, rgse*(gse(j) - gse_s0)))
+            clstr(j) = fstab*max(clsmax - clfact*cloudc(j), 0.0)
+
+            ! Stratocumulus clouds over land
+            clstrl   = max(clstr(j), clsminl)*rh(j,nlev)
+            clstr(j) = clstr(j) + fmask(j)*(clstrl - clstr(j))
+        end do
+    end subroutine cloud
+
 !      SUBROUTINE RADSW (PSA,QA,ICLTOP,CLOUDC,CLSTR,
 !     &                  FSFCD,FSFC,FTOP,DFABS)
 !C--

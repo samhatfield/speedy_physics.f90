@@ -17,7 +17,7 @@ contains
         use humidity, only: spec_hum_to_rel_hum
         use convection, only: get_convection_tendencies
         use condensation, only: get_large_scale_condensation_tendencies
-        use radiation, only: sol_oz
+        use radiation, only: sol_oz, cloud
         use utils, only: get_flux_conv_uvq
 
         ! Constants + functions of sigma and latitude
@@ -85,6 +85,20 @@ contains
 
         ! Intermediate variables for radiation
         real :: topsr(nlat)
+        real :: fsol(ngp)
+        real :: ozupp(ngp)
+        real :: ozone(ngp)
+        real :: zenit(ngp)
+        real :: stratz(ngp)
+        real :: qcloud(ngp)
+        real :: cloudc(ngp)
+        real :: clstr(ngp)
+        real :: cltop(ngp)
+        real :: prtop(ngp)
+        real :: ssrd(ngp)
+        real :: ssr(ngp)
+        real :: tsr(ngp)
+        real :: tend_t_rsw(ngp,nlev)
 
         ! Array for converting fluxes of prognostics into tendencies
         real :: grdsig(nlev)
@@ -153,22 +167,22 @@ contains
 
         ! Compute shortwave tendencies and initialize lw transmissivity
         ! The sw radiation may be called at selected time steps
-!       if (lradsw) then
-!            gse(:) = (stat_en(:,nlev-1) - stat_en(:,nlev))/(prog_phi(:,nlev-1) - prog_phi(:,nlev))
-!
-            call sol_oz(tyear, nlon, lats, topsr)
-!
-!            call cloud(qg1,rh,precnv,precls,iptop,gse,fmask1,icltop,cloudc,clstr)
-!
-!            cltop(:) = sigh(icltop(:,1)-1)*prog_sp(:)
-!            prtop(:) = float(iptop(:))
-!
-!            call radsw(prog_sp,qg1,icltop,cloudc,clstr,ssrd,ssr,tsr,tt_rsw)
-!
+        gse(:) = (stat_en(:,nlev-1) - stat_en(:,nlev))/(prog_phi(:,nlev-1) - prog_phi(:,nlev))
+
+        call sol_oz(tyear, nlon, lats, topsr, fsol, ozupp, ozone, zenit, stratz)
+
+        call cloud(prog_q, rh, cnv_prec, precls, cnv_top, gse, lsm, &
+                    & ngp, nlev, &
+                    & icltop, cloudc, clstr, qcloud)
+
+        cltop(:) = sig_half(icltop(:,1) - 1)*prog_sp(:)
+        prtop(:) = float(cnv_top(:))
+
+        !call radsw(prog_sp, prog_q, icltop, cloudc, clstr, ssrd, ssr, tsr, tend_t_rsw)
+
 !            do k = 1, nlev
-!                tt_rsw(:,k) = tt_rsw(:,k)*rps(:)*grdscp(k)
+!                tend_t_rsw(:,k) = tend_t_rsw(:,k)*rps(:)*grdscp(k)
 !            end do
-!       end if
 
 !C     3.2 Compute downward longwave fluxes 
 !
