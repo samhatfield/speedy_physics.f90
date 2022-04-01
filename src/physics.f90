@@ -10,7 +10,7 @@ contains
     !> Compute physical parametrization tendencies for u, v, t, q and add them
     !  to the dynamical grid-point tendencies
     subroutine get_physical_tendencies(prog_u, prog_v, prog_t, prog_q, prog_phi, prog_sp, &
-                                     & ngp, nlev, nlat, sig, lats, tyear, lsm, &
+                                     & ngp, nlev, nlat, sig_half, lats, tyear, lsm, &
                                      & tend_u, tend_v, tend_t, tend_q)
         ! Resolution parameters
         use physical_constants, only: cp
@@ -51,7 +51,7 @@ contains
         integer, intent(in) :: ngp
         integer, intent(in) :: nlev
         integer, intent(in) :: nlat
-        real, intent(in) :: sig(nlev)
+        real, intent(in) :: sig_half(nlev+1)
         real, intent(in) :: lats(nlat)
         real, intent(in) :: tyear
         real, intent(in) :: lsm(ngp)
@@ -65,6 +65,8 @@ contains
         real :: stat_en(ngp,nlev)
         real :: rh(ngp,nlev)
         real :: qsat(ngp,nlev)
+
+        real :: sig(nlev)
 
         integer :: nlon
 
@@ -86,6 +88,9 @@ contains
 
         ! Array for converting fluxes of prognostics into tendencies
         real :: grdsig(nlev)
+
+        ! Compute full sigma levels from half sigma levels
+        sig = 0.5*(sig_half(2:) + sig_half(:nlev-1))
 
         nlon = ngp/nlat
 

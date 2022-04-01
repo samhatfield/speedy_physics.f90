@@ -18,7 +18,6 @@ nlev, ngp = progs["u"].shape
 
 # Define sigma levels
 σ_half = np.array([0.000, 0.050, 0.140, 0.260, 0.420, 0.600, 0.770, 0.900, 1.000])
-σ = 0.5*(σ_half[1:] + σ_half[:-1])
 
 # Open land-sea mask
 lsm = xr.open_dataset("lsm.nc")
@@ -38,7 +37,7 @@ tyear = 0.0
 
 tend_u, tend_v, tend_t, tend_q = physics.get_physical_tendencies(prog_u, prog_v, prog_t, prog_q,
                                                                  prog_phi, prog_sp,
-                                                                 σ, lats, tyear, lsm)
+                                                                 σ_half, lats, tyear, lsm)
 
 # Only plot 10 grid points
 npoints = 10
