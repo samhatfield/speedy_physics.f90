@@ -164,6 +164,133 @@ contains
         end do
     end subroutine solar
 
+    subroutine solar_diurnal(tyear, rday, csol, lats, nlon, topsr)
+        !-----------------------------------------------------------------------
+        ! From ECBILT-CLIO model
+        ! Calculates incoming solar radiation as a function of latitude
+        ! for each day of the year, given the orbital parameters (see PMIP)
+        ! One year has 360 days.  Reference: A. Berger, JAS, 35, 2362-2367,1978
+        !-----------------------------------------------------------------------
+
+        real, intent(in) :: tyear
+        real, intent(in) :: rday
+        real, intent(in) :: csol
+        real, intent(in) :: lats(:)
+        integer, intent(in) :: nlon
+        real, intent(out) :: topsr(nlon,size(lats))
+
+        integer i, j, l, NVE, nlat
+        real :: clat(size(lats)), slat(size(lats))
+
+        real :: beta, alam, alam0, ala, ala0
+        real :: fac1, fac2, fac3, ro
+        real :: deltal, sindl, cosdl, tandl
+        real :: rkosz, rkosha1, ha1
+        real :: deg2rad, day2rad
+        real :: solard, solarf, solarcf, rlon, omweb, obl, hangle, ecc, cmu
+
+        nlat = size(lats)
+
+        ! Compute cosine and sine of latitude
+        clat = cos(lats*pi/180.0)
+        slat = sin(lats*pi/180.0)
+
+        deg2rad = 2.0*asin(1.0)/180.0
+        day2rad = 2.0*asin(1.0)/180.0
+
+        ! Present-day orbital parameters: eccentricity ecc, obliquity obl and
+        ! angle om between Vernal Equinox and Perihelion (angles all given
+        ! in degrees and converted to radians). Solarc is the solar constant.
+        ! NVE is day of the Vernal Equinox, set at 21 MARCH
+        ! Implementatie van Nanne
+
+        !mbp_s
+        ecc = 0.016724
+        !      ecc=0.016724*3.
+        !mbp_e
+        obl = 23.446*deg2rad
+        !mbp_s
+        omweb = (102.04 + 180.00)*deg2rad
+        !      omweb=(102.04+180.00-180.0)*deg2rad
+        !mbp_e
+        !      csol=1365.
+        NVE = 30 + 30 + 21
+
+        ! In old SW-routine of ECBilt-model values were as follows:
+        !
+        !      ecc=0.0
+        !      csol=1353.
+        !      NVE=90
+        !
+        ! At 6000 years BP (Before Present) values were as follows:
+        !
+        !      ecc=0.018682
+        !      obl=24.105*deg2rad
+        !      omweb=(0.87+180.00)*deg2rad
+        !
+        ! :LGM:
+        !     ecc=0.018994
+        !     obl=22.949*deg2rad
+        !     omweb=(114.42+180.00)*deg2rad
+
+        ! First compute alam0 (the starting point). Then convert days to
+        ! the true longitude ala, using Berger's formulae.
+        ! Longitude ala loops from 0 (Vernal Equinox) to 359, ro is earth-sun
+        ! distance relative to the major axis, del is declination.
+        ala0 = 0.0
+        beta = (1.0 - ecc**2.0)**0.5
+        fac1 = (0.5*ecc + 0.125*ecc**3.0)*(1.0 + beta)*sin(ala0 - omweb)
+        fac2 = 0.25*ecc**2.0*(0.5 + beta)*sin(2.0*(ala0 - omweb))
+        fac3 = 0.125*ecc**3.0*(1.0/3.0 + beta)*sin(3.0*(ala0 -omweb))
+        alam0 = ala0-2.0*(fac1 - fac2 + fac3)
+
+        !      l=(imonth-1)*30+iday-NVE
+        l = tyear*360 - NVE
+
+        if (l < 0) l = l + 360
+        alam = alam0 + l*1.0*2.0*asin(1.0)/180.0
+
+        fac1 = (2.0*ecc - 0.25*ecc**3.0)*sin(alam - omweb)
+        fac2 = 1.25*ecc**2.0*sin(2.0*(alam - omweb))
+        fac3 = (13.0/12.0)*ecc**3.0*sin(3.0*(alam - omweb))
+        ala = alam + fac1 + fac2 + fac3
+        ro = (1.0 - ecc**2.0)/(1.0 + ecc*cos(ala - omweb))
+        deltal = asin(sin(obl)*sin(ala))
+
+        sindl = sin(deltal)
+        cosdl = cos(deltal)
+        tandl = tan(deltal)
+
+        ! factor voor variable afstand Aarde-Zon (Berger, p.2367; Velds, p. 99)
+        solard = 1.0/ro**2.0
+        solarcf = csol
+        ! beide effecten samen
+        solarf = solarcf*solard
+
+        do i = 1, nlon
+            do j = 1, nlat
+                rkosha1 = -(slat(j)/clat(j))*tandl
+                rkosha1 = sign(min(abs(rkosha1), 1.0), rkosha1)
+                ha1 = acos(rkosha1)
+                rlon = float(i)/float(nlon)
+                hangle = 2.0*acos(-1.0)*(tyear + rday + rlon)
+                cmu = slat(j)*sindl - clat(j)*cosdl*cos(hangle)
+                !fk
+                !fk  NCAR Technical Note NCAR/TN-485+STR (CAM4.0), page 116
+                !fk  note that only if cmu pos it is counted (Wiki pedia
+                !fk  Solar Irradiance, https://en.wikipedia.org/wiki/Solar_irradiance)
+                !fk
+                !fk   daily mean formulae
+                !fk
+                !fk          rkosz=slat(j)*sindl*(ha1 - tan(ha1))/(2.*asin(1.))
+                !fk   daily variing formulae
+                !fk
+                rkosz = max(cmu,0.0)
+                topsr(i,j) = rkosz*csol*solard
+            end do
+        end do
+    end subroutine solar_diurnal
+
     subroutine cloud(prog_q, rh, cnv_prec, precls, cnv_top, gse, fmask, &
                    & ngp, nlev, &
                    & icltop, cloudc, clstr, qcloud)
