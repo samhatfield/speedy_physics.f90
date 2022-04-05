@@ -178,7 +178,7 @@ contains
         cltop(:) = sig_half(icltop(:,1) - 1)*prog_sp(:)
         prtop(:) = float(cnv_top(:))
 
-        !call radsw(prog_sp, prog_q, icltop, cloudc, clstr, ssrd, ssr, tsr, tend_t_rsw)
+        !call radsw(prog_sp, prog_q, icltop, cloudc, clstr, zenit, qcloud, ssrd, ssr, tsr, tend_t_rsw)
 
 !            do k = 1, nlev
 !                tend_t_rsw(:,k) = tend_t_rsw(:,k)*rps(:)*grdscp(k)
