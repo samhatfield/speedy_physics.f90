@@ -3,7 +3,7 @@ module radiation
     implicit none
 
     private
-    public sol_oz, cloud
+    public sol_oz, cloud, radsw
 
     ! Shortwave radiation and cloud constants
     real, parameter :: solc    = 342.0 !! Solar constant (area averaged) in W/m^2
@@ -36,6 +36,20 @@ module radiation
     real, parameter :: abscl2  = 0.15  !! Absorptivity of clouds
                                        !! (visible band, for dq_base = 1 g/kg)
 
+    ! Longwave absorptivities (per dp = 10^5 Pa)
+    real, parameter :: ablwin =  0.3  !! Absorptivity of air in "window" band
+    real            :: ablco2 =  6.0  !! Absorptivity of air in CO2 band
+    real, parameter :: ablwv1 =  0.7  !! Absorptivity of water vapour in H2O band 1 (weak),
+                                      !! (for dq = 1 g/kg)
+    real, parameter :: ablwv2 = 50.0  !! Absorptivity of water vapour in H2O band 2 (strong),
+                                      !! (for dq = 1 g/kg)
+    real, parameter :: ablcl1 = 12.0  !! Absorptivity of "thick" clouds in window band
+                                      !! (below cloud top)
+    real, parameter :: ablcl2 =  0.6  !! Absorptivity of "thin" upper clouds in window and H2O
+                                      !! bands
+
+    real, parameter :: epslw = 0.05 !! Fraction of blackbody spectrum absorbed/emitted by PBL only
+
     real, parameter :: pi = 3.14159265359
 
 contains
@@ -53,7 +67,6 @@ contains
 
         integer :: ngp, nlat, nzen, i, j, j0
 
-        real :: r4out(nlon*size(lats))
         real :: alpha, dalpha, coz1, coz2, azen, rzen, czen, szen, fs0, flat2
         real :: clat(size(lats)), slat(size(lats))
 
@@ -179,7 +192,7 @@ contains
         integer, intent(in) :: nlon
         real, intent(out) :: topsr(nlon,size(lats))
 
-        integer i, j, l, NVE, nlat
+        integer :: i, j, l, NVE, nlat
         real :: clat(size(lats)), slat(size(lats))
 
         real :: beta, alam, alam0, ala, ala0
@@ -245,7 +258,7 @@ contains
         alam0 = ala0-2.0*(fac1 - fac2 + fac3)
 
         !      l=(imonth-1)*30+iday-NVE
-        l = tyear*360 - NVE
+        l = int(tyear*360) - NVE
 
         if (l < 0) l = l + 360
         alam = alam0 + l*1.0*2.0*asin(1.0)/180.0
@@ -369,49 +382,51 @@ contains
         end do
     end subroutine cloud
 
-    subroutine radsw(prog_sp, prog_q, icltop, cloudc, clstr, zenit, &
-                   & ngp, nlev, sig, &
-                   & ssrd, ssr, tsr, tend_t_rsw)
+    subroutine radsw(prog_sp, prog_q, icltop, cloudc, clstr, ozupp, ozone, zenit, stratz, fsol, qcloud, albsfc, &
+                   & ngp, nlev, sig, dsig, &
+                   & ssrd, ssr, tsr, tau2, tend_t_rsw)
         real, intent(in) :: prog_sp(ngp)
         real, intent(in) :: prog_q(ngp,nlev)
         integer, intent(in) :: icltop(ngp)
         real, intent(in) :: cloudc(ngp)
         real, intent(in) :: clstr(ngp)
+        real, intent(in) :: ozupp(ngp)
+        real, intent(in) :: ozone(ngp)
         real, intent(in) :: zenit(ngp)
+        real, intent(in) :: stratz(ngp)
+        real, intent(in) :: fsol(ngp)
         real, intent(in) :: qcloud(ngp)
+        real, intent(in) :: albsfc(ngp)
         integer, intent(in) :: ngp
         integer, intent(in) :: nlev
         real, intent(in) :: sig(nlev)
+        real, intent(in) :: dsig(nlev)
         real, intent(out) :: ssrd(ngp)
         real, intent(out) :: ssr(ngp)
         real, intent(out) :: tsr(ngp)
         real, intent(out) :: tau2(ngp,nlev,4)
         real, intent(out) :: tend_t_rsw(ngp,nlev)
-
-!      real acloud(ngp)
 !
 !      equivalence (frefl(1,1),tau2(1,1,3))
         integer :: nl1, j, k
         real :: fband1, fband2
-        real :: frefl(ngp,nlev), acloud(ngp), psaz(ngp), abs1, deltap
+        real :: acloud(ngp), psaz(ngp), abs1, deltap, flux(ngp,2), eps1, stratc(ngp,2), acloud1
 
         nl1 = nlev - 1
 
         fband2 = 0.05
         fband1 = 1.0 - fband2
 
-!c      albminl=0.05
-
         ! 1. Initialization
-        frefl = 0.0
+        tau2 = 0.0
 
         do j = 1, ngp
             ! Change to ensure only ICLTOP <= NLEV used
             if (icltop(j) <= nlev) then
-                frefl(j,icltop(j)) = albcl*cloudc(j)
+                tau2(j,icltop(j),3) = albcl*cloudc(j)
             end if
             ! end change
-            frefl(j,nlev) = albcls*clstr(j)
+            tau2(j,nlev,3) = albcls*clstr(j)
         end do
 
         ! 2. Shortwave transmissivity:
@@ -452,136 +467,124 @@ contains
             end do
         end do
 
-!C---  3. Shortwave downward flux 
-!
-!C     3.1 Initialization of fluxes 
-!
-!      DO J=1,NGP
-!        tsr(J)  =FSOL(J)
-!        FLUX(J,1)=FSOL(J)*FBAND1
-!        FLUX(J,2)=FSOL(J)*FBAND2
-!      ENDDO
-!
-!C     3.2 Ozone and dry-air absorption in the stratosphere
-!
-!      K=1
-!      DO J=1,NGP
-!        tend_t_rsw(J,K)=FLUX(J,1)
-!        FLUX (J,1)=TAU2(J,K,1)*(FLUX(J,1)-OZUPP(J)*PSA(J))
-!        tend_t_rsw(J,K)=tend_t_rsw(J,K)-FLUX(J,1)
-!      ENDDO
-!
-!      K=2
-!      DO J=1,NGP
-!        tend_t_rsw(J,K)=FLUX(J,1)
-!        FLUX (J,1)=TAU2(J,K,1)*(FLUX(J,1)-OZONE(J)*PSA(J))
-!        tend_t_rsw(J,K)=tend_t_rsw(J,K)-FLUX(J,1)
-!      ENDDO
-!
-!C     3.3  Absorption and reflection in the troposphere
-!
-!      DO K=3,NLEV
-!       DO J=1,NGP
-!         FREFL(J,K)=FLUX(J,1)*FREFL(J,K)
-!         FLUX (J,1)=FLUX(J,1)-FREFL(J,K)
-!         tend_t_rsw(J,K)=FLUX(J,1)
-!         FLUX (J,1)=TAU2(J,K,1)*FLUX(J,1)
-!         tend_t_rsw(J,K)=tend_t_rsw(J,K)-FLUX(J,1)
-!       ENDDO
-!      ENDDO
-!
-!      DO K=2,NLEV
-!       DO J=1,NGP
-!         tend_t_rsw(J,K)=tend_t_rsw(J,K)+FLUX(J,2)
-!         FLUX (J,2)=TAU2(J,K,2)*FLUX(J,2)
-!         tend_t_rsw(J,K)=tend_t_rsw(J,K)-FLUX(J,2)
-!       ENDDO
-!      ENDDO
-!
-!C
-!C---  4. Shortwave upward flux 
-!	
-!C     4.1  Absorption and reflection at the surface
-!
-!      DO J=1,NGP
-!        ssrd(J)  = FLUX(J,1)+FLUX(J,2)
-!        FLUX(J,1) = FLUX(J,1)*ALBSFC(J)
-!        ssr(J)   = ssrd(J)-FLUX(J,1)
-!      ENDDO
-!	
-!C     4.2  Absorption of upward flux
-!
-!      DO K=NLEV,1,-1
-!       DO J=1,NGP
-!         tend_t_rsw(J,K)=tend_t_rsw(J,K)+FLUX(J,1)
-!         FLUX (J,1)=TAU2(J,K,1)*FLUX(J,1)
-!         tend_t_rsw(J,K)=tend_t_rsw(J,K)-FLUX(J,1)
-!         FLUX (J,1)=FLUX(J,1)+FREFL(J,K)
-!       ENDDO
-!      ENDDO
-!
-!C     4.3  Net solar radiation = incoming - outgoing
-!
-!      DO J=1,NGP
-!        tsr(J)=tsr(J)-FLUX(J,1)
-!      ENDDO
-!C
-!C---  5.  Initialization of longwave radiation model
-!
-!C     5.1  Longwave transmissivity:
-!C          function of layer mass, abs. humidity and cloud cover.
-!
-!C     Cloud-free levels (stratosphere + PBL)
-!
-!      K=1
-!        DO J=1,NGP
-!          DELTAP=PSA(J)*DSIG(K)
-!          TAU2(J,K,1)=EXP(-DELTAP*ABLWIN)
-!          TAU2(J,K,2)=EXP(-DELTAP*ABLCO2)
-!          TAU2(J,K,3)=1.
-!          TAU2(J,K,4)=1.
-!        ENDDO
-!
-!      DO K=2,NLEV,NLEV-2
-!        DO J=1,NGP
-!          DELTAP=PSA(J)*DSIG(K)
-!          TAU2(J,K,1)=EXP(-DELTAP*ABLWIN)
-!          TAU2(J,K,2)=EXP(-DELTAP*ABLCO2)
-!          TAU2(J,K,3)=EXP(-DELTAP*ABLWV1*QA(J,K))
-!          TAU2(J,K,4)=EXP(-DELTAP*ABLWV2*QA(J,K))
-!        ENDDO
-!      ENDDO
-!
-!C     Cloudy layers (free troposphere)
-!
-!      DO J=1,NGP
-!        ACLOUD(J)=CLOUDC(J)*ABLCL2
-!      ENDDO
-!
-!      DO K=3,NL1
-!       DO J=1,NGP
-!         DELTAP=PSA(J)*DSIG(K)
-!         IF (K.LT.ICLTOP(J)) THEN
-!           ACLOUD1=ACLOUD(J)
-!         ELSE
-!           ACLOUD1=ABLCL1*CLOUDC(J)
-!         ENDIF
-!         TAU2(J,K,1)=EXP(-DELTAP*(ABLWIN+ACLOUD1))
-!         TAU2(J,K,2)=EXP(-DELTAP*ABLCO2)
-!         TAU2(J,K,3)=EXP(-DELTAP*MAX(ABLWV1*QA(J,K),ACLOUD(J)))
-!         TAU2(J,K,4)=EXP(-DELTAP*MAX(ABLWV2*QA(J,K),ACLOUD(J)))
-!       ENDDO
-!      ENDDO
-!
-!C     5.2  Stratospheric correction terms
-!
-!      EPS1=EPSLW/(DSIG(1)+DSIG(2))
-!      DO J=1,NGP
-!        STRATC(J,1)=STRATZ(J)*PSA(J)
-!        STRATC(J,2)=EPS1*PSA(J)
-!      ENDDO
-        end subroutine radsw
-!
+        ! 3. Shortwave downward flux
+        ! 3.1 Initialization of fluxes
+        do j = 1, ngp
+            tsr(j)    = fsol(j)
+            flux(j,1) = fsol(j)*fband1
+            flux(j,2) = fsol(j)*fband2
+        end do
+
+        ! 3.2 Ozone and dry-air absorption in the stratosphere
+        k = 1
+        do j = 1, ngp
+            tend_t_rsw(j,k) = flux(j,1)
+            flux (j,1) = tau2(j,k,1)*(flux(j,1) - ozupp(j)*prog_sp(j))
+            tend_t_rsw(j,k) = tend_t_rsw(j,k) - flux(j,1)
+        end do
+
+        k = 2
+        do j = 1, ngp
+            tend_t_rsw(j,k) = flux(j,1)
+            flux (j,1) = tau2(j,k,1)*(flux(j,1) - ozone(j)*prog_sp(j))
+            tend_t_rsw(j,k) = tend_t_rsw(j,k) - flux(j,1)
+        end do
+
+        ! 3.3  Absorption and reflection in the troposphere
+        do k = 3, nlev
+            do j = 1, ngp
+                tau2(j,k,3)      = flux(j,1)*tau2(j,k,3)
+                flux (j,1)      = flux(j,1) - tau2(j,k,3)
+                tend_t_rsw(j,k) = flux(j,1)
+                flux (j,1)      = tau2(j,k,1)*flux(j,1)
+                tend_t_rsw(j,k) = tend_t_rsw(j,k) - flux(j,1)
+            end do
+        end do
+
+        do k = 2, nlev
+            do j = 1, ngp
+                tend_t_rsw(j,k) = tend_t_rsw(j,k) + flux(j,2)
+                flux (j,2)      = tau2(j,k,2)*flux(j,2)
+                tend_t_rsw(j,k) = tend_t_rsw(j,k) - flux(j,2)
+            end do
+        end do
+
+
+        ! 4. Shortwave upward flux
+        ! 4.1  Absorption and reflection at the surface
+        do j = 1, ngp
+            ssrd(j)   = flux(j,1)+flux(j,2)
+            flux(j,1) = flux(j,1)*albsfc(j)
+            ssr(j)    = ssrd(j) - flux(j,1)
+        end do
+
+        ! 4.2  Absorption of upward flux
+        do k = nlev, 1, -1
+            do j = 1, ngp
+                tend_t_rsw(j,k) = tend_t_rsw(j,k) + flux(j,1)
+                flux (j,1)      = tau2(j,k,1)*flux(j,1)
+                tend_t_rsw(j,k) = tend_t_rsw(j,k) - flux(j,1)
+                flux (j,1)      = flux(j,1) + tau2(j,k,3)
+            end do
+        end do
+
+        ! 4.3  Net solar radiation = incoming - outgoing
+        do j = 1, ngp
+            tsr(j) = tsr(j) - flux(j,1)
+        end do
+
+        ! 5.  Initialization of longwave radiation model
+        ! 5.1  Longwave transmissivity:
+        !      function of layer mass, abs. humidity and cloud cover.
+
+        !    Cloud-free levels (stratosphere + PBL)
+        k = 1
+        do j=1,ngp
+            deltap = prog_sp(j)*dsig(k)
+            tau2(j,k,1) = exp(-deltap*ablwin)
+            tau2(j,k,2) = exp(-deltap*ablco2)
+            tau2(j,k,3) = 1.0
+            tau2(j,k,4) = 1.0
+        end do
+
+        do k = 2, nlev, nlev - 2
+            do j = 1, ngp
+                deltap      = prog_sp(j)*dsig(k)
+                tau2(j,k,1) = exp(-deltap*ablwin)
+                tau2(j,k,2) = exp(-deltap*ablco2)
+                tau2(j,k,3) = exp(-deltap*ablwv1*prog_q(j,k))
+                tau2(j,k,4) = exp(-deltap*ablwv2*prog_q(j,k))
+            end do
+        end do
+
+        ! Cloudy layers (free troposphere)
+        do j = 1, ngp
+            acloud(j) = cloudc(j)*ablcl2
+        end do
+
+        do k = 3, nl1
+            do j = 1, ngp
+                deltap = prog_sp(j)*dsig(k)
+                if (k < icltop(j)) then
+                    acloud1 = acloud(j)
+                else
+                    acloud1 = ablcl1*cloudc(j)
+                endif
+                tau2(j,k,1) = exp(-deltap*(ablwin+acloud1))
+                tau2(j,k,2) = exp(-deltap*ablco2)
+                tau2(j,k,3) = exp(-deltap*max(ablwv1*prog_q(j,k),acloud(j)))
+                tau2(j,k,4) = exp(-deltap*max(ablwv2*prog_q(j,k),acloud(j)))
+            end do
+        end do
+
+        ! 5.2  Stratospheric correction terms
+        eps1 = epslw/(dsig(1) + dsig(2))
+        do j = 1, ngp
+            stratc(j,1) = stratz(j)*prog_sp(j)
+            stratc(j,2) = eps1*prog_sp(j)
+        end do
+    end subroutine radsw
+
 !      SUBROUTINE RADLW (IMODE,TA,TS,
 !     &                  FSFCD,FSFCU,
 !     &                  FSFC,FTOP,DFABS)

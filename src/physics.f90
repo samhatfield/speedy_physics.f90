@@ -17,7 +17,7 @@ contains
         use humidity, only: spec_hum_to_rel_hum
         use convection, only: get_convection_tendencies
         use condensation, only: get_large_scale_condensation_tendencies
-        use radiation, only: sol_oz, cloud
+        use radiation, only: sol_oz, cloud, radsw
         use utils, only: get_flux_conv_uvq
 
         ! Constants + functions of sigma and latitude
@@ -39,7 +39,7 @@ contains
         !include "com_lflags.h"
         !include "com_cpl_flags.h"
 
-        ! Date 
+        ! Date
         !include "com_date.h"
 
         real, intent(in) :: prog_u(ngp,nlev)
@@ -67,6 +67,7 @@ contains
         real :: qsat(ngp,nlev)
 
         real :: sig(nlev)
+        real :: dsig(nlev)
 
         integer :: nlon
 
@@ -91,6 +92,7 @@ contains
         real :: zenit(ngp)
         real :: stratz(ngp)
         real :: qcloud(ngp)
+        real :: albsfc(ngp)
         real :: cloudc(ngp)
         real :: clstr(ngp)
         real :: cltop(ngp)
@@ -98,6 +100,7 @@ contains
         real :: ssrd(ngp)
         real :: ssr(ngp)
         real :: tsr(ngp)
+        real :: tau2(ngp, nlev,4)
         real :: tend_t_rsw(ngp,nlev)
 
         ! Array for converting fluxes of prognostics into tendencies
@@ -105,6 +108,12 @@ contains
 
         ! Compute full sigma levels from half sigma levels
         sig = 0.5*(sig_half(2:) + sig_half(:nlev-1))
+
+        ! Compute sigma level thicknesses
+        dsig = sig_half(2:) - sig_half(:nlev-1)
+
+        ! For now set albedo to 0.5 everywhere
+        albsfc = 0.5
 
         nlon = ngp/nlat
 
@@ -178,11 +187,13 @@ contains
         cltop(:) = sig_half(icltop(:,1) - 1)*prog_sp(:)
         prtop(:) = float(cnv_top(:))
 
-        !call radsw(prog_sp, prog_q, icltop, cloudc, clstr, zenit, qcloud, ssrd, ssr, tsr, tend_t_rsw)
+        call radsw(prog_sp, prog_q, icltop, cloudc, clstr, ozupp, ozone, zenit, stratz, fsol, qcloud, albsfc, &
+                 & ngp, nlev, sig, dsig, &
+                 & ssrd, ssr, tsr, tau2, tend_t_rsw)
 
-!            do k = 1, nlev
-!                tend_t_rsw(:,k) = tend_t_rsw(:,k)*rps(:)*grdscp(k)
-!            end do
+        do k = 1, nlev
+            tend_t(:,k) = tend_t(:,k) + tend_t_rsw(:,k)*prog_sp_inv(:)*grdsig(k)/cp
+        end do
 
 !C     3.2 Compute downward longwave fluxes 
 !
