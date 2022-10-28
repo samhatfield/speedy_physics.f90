@@ -39,22 +39,24 @@ tend_u, tend_v, tend_t, tend_q = physics.get_physical_tendencies(prog_u, prog_v,
                                                                  prog_phi, prog_sp,
                                                                  σ_half, lats, tyear, lsm)
 
-# Only plot 10 grid points
-npoints = 10
-
 # Model levels
 levels = range(1, nlev+1)
+
+# Only plot 10 grid points
+npoints = 10
+np.random.seed(1)
+grid_points_to_plot = np.random.choice(tend_t.shape[0], npoints)
 
 fig, ax = plt.subplots(ncols=2, figsize=(12, 6), sharey=True)
 plt.suptitle("Parametrised physical tendencies for 10 selected grid points")
 
-for i, _ in zip(grid_points_to_plot, range(npoints)):
+for i in grid_points_to_plot:
     ax[0].plot(tend_t[i,:], levels)
 ax[0].invert_yaxis()
 ax[0].set_title("Temperature tendency")
 ax[0].set_ylabel("Model level")
 
-for i, _ in zip(grid_points_to_plot, range(npoints)):
+for i in grid_points_to_plot:
     ax[1].plot(tend_q[i,:], levels)
 ax[1].set_title("Humidity tendency")
 
